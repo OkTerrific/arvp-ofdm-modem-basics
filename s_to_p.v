@@ -2,44 +2,59 @@
 
 module s_to_p #(
     parameter IWIDTH = 8,
-    parameter OWIDTH = 4
+    parameter OWIDTH = 8
 ) (
-    input wire clk,
+    input wire clk1,
+	input wire clk2,
     input wire rst,
 
-    input wire [IWIDTH-1:0] i_data,
-    input wire i_valid,
-    output reg i_ready,
+    input wire i_data,
 
-    output reg [IWIDTH*OWIDTH-1:0] o_data,
-    output reg o_valid,
+    output reg [IWIDTH*OWIDTH-1:0] o_reg,
     input wire o_ready
 );
 
-reg [OWIDTH:0] cntr;
+reg [IWIDTH:0] i_ctr;
+reg [OWIDTH:0] o_ctr;
+reg [IWIDTH-1:0] i_reg;
+reg [1:0] state;
+parameter state_1 = 0, state_2 = 1;
 
-always @(posedge clk) begin
+always @(posedge clk or posedge rst) begin
+
+    if (rst) 
+		state = state_1;
+    else begin
+        case (state)
+			state_1: /* Load i_reg*/
+				if(i_ctr = IWIDTH)
+					state = state_2;
+			state_2: /* Load o_reg */
+				state = state_1;
+			default: state = state_1;
+		endcase
+    end
+end
+
+always @(posedge clk or posedge rst) begin
 
     if (rst) begin
-        cntr    <= 0;
-        i_ready <= 0;
-        o_data  <= 0;
-        o_valid <= 0;
-
+        i_ctr   <= 0;
+		o_ctr 	<= 0;
+        i_reg 	<= 0;
+        o_reg  <= 0;
     end else begin
-        i_ready <= 0;
-
-        // If our output buffer isn't full, we want to be reading in any valid data
-        if (cntr < OWIDTH) begin
-            i_ready <= 1;
-            if (i_valid & cntr < OWIDTH) begin
-                cntr <= cntr + 1;
-                o_data[(cntr * IWIDTH * OWIDTH) +: IWIDTH] <= i_data;
-            end
-        end else begin
-            o_valid <= 1;
-            if (o_ready & o_valid) cntr <= 0;
-        end
+	    case (state)
+			state_1: /* Load i_reg with i_data until i_reg is full */
+				if (i_cntr < IWIDTH) begin
+                i_ctr <= i_ctr + 1;
+                i_reg[i_ctr] <= i_data;
+				end
+			state_2: /* Load o_reg indexed by o_ctr */
+				i_ctr <= 0;
+				o_ctr <= o_ctr + 1;
+				o_reg[(o_ctr * OWIDTH) + OWIDTH : 0] = i_reg;
+		endcase
     end
 end
 
